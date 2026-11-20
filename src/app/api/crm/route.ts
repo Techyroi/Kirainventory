@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, hashPassword } from '@/lib/auth';
+import { getSessionFromRequest, hashPassword, isPlatformAdminEmail } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { CrmClient, CrmClientUser } from '@/types';
 
@@ -8,11 +8,10 @@ async function requirePlatformAdmin(req: NextRequest) {
   if (!session) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  const db = await getDb();
-  const user = await db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
-  if (!user?.is_platform_admin) {
+  if (!isPlatformAdminEmail(session.email)) {
     return { error: NextResponse.json({ error: 'Platform administrator access required' }, { status: 403 }) };
   }
+  const db = await getDb();
   return { session, db };
 }
 

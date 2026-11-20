@@ -56,8 +56,8 @@ export async function seedDatabase(existingDb?: DbClient) {
   for (const u of users) {
     await db.prepare(`
       INSERT INTO users (id, business_id, name, email, password_hash, role, status, is_platform_admin, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    `).run(u.id, bizId, u.name, u.email, passwordHash, u.role, u.id === 'usr_admin' ? 1 : 0, pastDate(60), now);
+      VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?, ?)
+    `).run(u.id, bizId, u.name, u.email, passwordHash, u.role, pastDate(60), now);
   }
 
   // 3. Create Categories

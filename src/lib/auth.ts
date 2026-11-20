@@ -91,6 +91,16 @@ export async function getSessionFromRequest(req?: NextRequest): Promise<UserSess
   return session;
 }
 
+export function isPlatformAdminEmail(email?: string | null): boolean {
+  const configured = process.env.PLATFORM_ADMIN_EMAIL?.trim();
+  if (!configured || !email) return false;
+  const allowed = configured
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return allowed.includes(email.trim().toLowerCase());
+}
+
 export function enforceRole(session: UserSession | null, allowedRoles: ('Admin' | 'Manager' | 'Staff')[]): boolean {
   if (!session) return false;
   return allowedRoles.includes(session.role);

@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { getSessionFromRequest } from '@/lib/auth';
+import { getSessionFromRequest, isPlatformAdminEmail } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
@@ -26,7 +26,10 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    user,
+    user: {
+      ...user,
+      is_platform_admin: isPlatformAdminEmail(user.email)
+    },
     business
   });
 }

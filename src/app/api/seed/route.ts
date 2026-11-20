@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/auth';
-import { getDb } from '@/lib/db';
+import { getSessionFromRequest, isPlatformAdminEmail } from '@/lib/auth';
 import { seedDatabase } from '@/lib/seed';
 
 async function handleSeed(req: NextRequest) {
@@ -14,9 +13,7 @@ async function handleSeed(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = await getDb();
-    const user = await db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
-    if (!user?.is_platform_admin) {
+    if (!isPlatformAdminEmail(session.email)) {
       return NextResponse.json({ error: 'Platform administrator access required' }, { status: 403 });
     }
 

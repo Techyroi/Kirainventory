@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { comparePassword, signToken } from '@/lib/auth';
+import { comparePassword, isPlatformAdminEmail, signToken } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       name: user.name,
       email: user.email,
       role: user.role,
-      isPlatformAdmin: Boolean(user.is_platform_admin)
+      isPlatformAdmin: isPlatformAdminEmail(user.email)
     };
 
     const token = signToken(sessionPayload);

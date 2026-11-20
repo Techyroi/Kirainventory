@@ -328,11 +328,13 @@ async function initSchema(db: DbClient) {
     await db.exec(`ALTER TABLE users ADD COLUMN is_platform_admin INTEGER DEFAULT 0`);
   }
 
-  // Ensure a platform admin exists (defaults to PLATFORM_ADMIN_EMAIL or admin@demo.com)
-  const hasPlatformAdmin = await db.prepare(`SELECT id FROM users WHERE is_platform_admin = 1 LIMIT 1`).get();
-  if (!hasPlatformAdmin) {
-    const targetEmail = process.env.PLATFORM_ADMIN_EMAIL || 'admin@demo.com';
-    await db.prepare(`UPDATE users SET is_platform_admin = 1 WHERE email = ?`).run(targetEmail);
+  // Sync platform admin flag strictly from PLATFORM_ADMIN_EMAIL (never grant demo admin by default)
+  await db.prepare(`UPDATE users SET is_platform_admin = 0 WHERE is_platform_admin = 1`).run();
+  const platformEmail = process.env.PLATFORM_ADMIN_EMAIL?.trim();
+  if (platformEmail) {
+    for (const email of platformEmail.split(',').map((e) => e.trim()).filter(Boolean)) {
+      await db.prepare(`UPDATE users SET is_platform_admin = 1 WHERE LOWER(email) = LOWER(?)`).run(email);
+    }
   }
 
   // Auto-seed demo data if the database is completely empty (e.g. fresh Turso DB)
