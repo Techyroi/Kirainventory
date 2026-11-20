@@ -1,24 +1,24 @@
-import { getDb, executeStockMovement } from './db';
+import { getDb, DbClient } from './db';
 import bcrypt from 'bcryptjs';
 
-export async function seedDatabase() {
-  const db = getDb();
+export async function seedDatabase(existingDb?: DbClient) {
+  const db = existingDb || (await getDb());
 
   console.log('🌱 Clearing existing database tables...');
-  db.exec('PRAGMA foreign_keys = OFF;');
-  db.exec('DELETE FROM notifications;');
-  db.exec('DELETE FROM inventory_movements;');
-  db.exec('DELETE FROM sale_items;');
-  db.exec('DELETE FROM sales;');
-  db.exec('DELETE FROM purchase_items;');
-  db.exec('DELETE FROM purchases;');
-  db.exec('DELETE FROM products;');
-  db.exec('DELETE FROM customers;');
-  db.exec('DELETE FROM suppliers;');
-  db.exec('DELETE FROM categories;');
-  db.exec('DELETE FROM users;');
-  db.exec('DELETE FROM businesses;');
-  db.exec('PRAGMA foreign_keys = ON;');
+  await db.exec('PRAGMA foreign_keys = OFF;');
+  await db.exec('DELETE FROM notifications;');
+  await db.exec('DELETE FROM inventory_movements;');
+  await db.exec('DELETE FROM sale_items;');
+  await db.exec('DELETE FROM sales;');
+  await db.exec('DELETE FROM purchase_items;');
+  await db.exec('DELETE FROM purchases;');
+  await db.exec('DELETE FROM products;');
+  await db.exec('DELETE FROM customers;');
+  await db.exec('DELETE FROM suppliers;');
+  await db.exec('DELETE FROM categories;');
+  await db.exec('DELETE FROM users;');
+  await db.exec('DELETE FROM businesses;');
+  await db.exec('PRAGMA foreign_keys = ON;');
 
   const now = new Date().toISOString();
   const pastDate = (daysAgo: number) => {
@@ -29,7 +29,7 @@ export async function seedDatabase() {
 
   // 1. Create Business
   const bizId = 'biz_demo_101';
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO businesses (id, name, logo, email, phone, address, currency, default_tax_rate, allow_negative_inventory, default_min_stock, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
@@ -56,7 +56,7 @@ export async function seedDatabase() {
   ];
 
   for (const u of users) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, business_id, name, email, password_hash, role, status, is_platform_admin, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
     `).run(u.id, bizId, u.name, u.email, passwordHash, u.role, u.id === 'usr_admin' ? 1 : 0, pastDate(60), now);
@@ -72,7 +72,7 @@ export async function seedDatabase() {
   ];
 
   for (const c of categories) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO categories (id, business_id, name, description, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(c.id, bizId, c.name, c.description, pastDate(60), now);
@@ -88,7 +88,7 @@ export async function seedDatabase() {
   ];
 
   for (const s of suppliers) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO suppliers (id, business_id, company_name, contact_person, email, phone, address, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'Tier-1 Trusted Supplier', ?, ?)
     `).run(s.id, bizId, s.company_name, s.contact_person, s.email, s.phone, s.address, pastDate(60), now);
@@ -109,7 +109,7 @@ export async function seedDatabase() {
   ];
 
   for (const c of customers) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO customers (id, business_id, name, email, phone, address, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 'Key Corporate Client', ?, ?)
     `).run(c.id, bizId, c.name, c.email, c.phone, c.address, pastDate(45), now);
@@ -150,7 +150,7 @@ export async function seedDatabase() {
   ];
 
   for (const p of products) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO products (
         id, business_id, name, sku, barcode, category_id, supplier_id, description, 
         cost_price, selling_price, current_stock, min_stock_level, max_stock_level, 
@@ -167,7 +167,7 @@ export async function seedDatabase() {
 
   // 7. Generate Stock Movements for initial stock
   for (const p of products) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO inventory_movements (
         id, business_id, product_id, user_id, movement_type, quantity, 
         previous_quantity, new_quantity, reason, reference_id, created_at
@@ -212,7 +212,7 @@ export async function seedDatabase() {
 
   for (const po of purchases) {
     const poDate = pastDate(po.daysAgo);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO purchases (id, business_id, purchase_number, supplier_id, user_id, status, payment_status, total_amount, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Standard wholesale reorder', ?, ?)
     `).run(po.id, bizId, po.number, po.supplier_id, po.user_id, po.status, po.payment, po.total, poDate, poDate);
@@ -220,7 +220,7 @@ export async function seedDatabase() {
     for (const item of po.items) {
       const itemId = 'poi_' + Math.random().toString(36).substring(2, 10);
       const total = item.qty * item.cost;
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO purchase_items (id, purchase_id, product_id, quantity, cost_price, total_price)
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(itemId, po.id, item.product_id, item.qty, item.cost, total);
@@ -276,7 +276,7 @@ export async function seedDatabase() {
     const tax = Math.round((subtotal * 0.085) * 100) / 100;
     const total = subtotal + tax;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO sales (id, business_id, invoice_number, customer_id, user_id, subtotal, discount_amount, tax_amount, total_amount, payment_method, status, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'Completed', 'POS Checkout', ?, ?)
     `).run(s.id, bizId, s.inv, s.cust_id, s.user_id, subtotal, tax, total, s.method, saleDate, saleDate);
@@ -284,13 +284,13 @@ export async function seedDatabase() {
     for (const item of s.items) {
       const itemId = 'sli_' + Math.random().toString(36).substring(2, 10);
       const totalItemPrice = item.qty * item.selling;
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO sale_items (id, sale_id, product_id, quantity, selling_price, cost_price, total_price)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(itemId, s.id, item.product_id, item.qty, item.selling, item.cost, totalItemPrice);
 
       // Record Sale movement
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO inventory_movements (id, business_id, product_id, user_id, movement_type, quantity, previous_quantity, new_quantity, reason, reference_id, created_at)
         VALUES (?, ?, ?, ?, 'Sale', ?, ?, ?, ?, ?, ?)
       `).run(
@@ -309,7 +309,7 @@ export async function seedDatabase() {
 
   for (let i = 0; i < notifications.length; i++) {
     const n = notifications[i];
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO notifications (id, business_id, title, message, type, is_read, reference_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run('notif_seed_' + i, bizId, n.title, n.msg, n.type, n.isRead, 'ref_' + i, pastDate(n.daysAgo));

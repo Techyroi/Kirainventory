@@ -3,13 +3,13 @@ import { getSessionFromRequest, hashPassword } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { CrmClient, CrmClientUser } from '@/types';
 
-function requirePlatformAdmin(req: NextRequest) {
-  const session = getSessionFromRequest(req);
+async function requirePlatformAdmin(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
   if (!session) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  const db = getDb();
-  const user = db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
+  const db = await getDb();
+  const user = await db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
   if (!user?.is_platform_admin) {
     return { error: NextResponse.json({ error: 'Platform administrator access required' }, { status: 403 }) };
   }
@@ -18,7 +18,7 @@ function requirePlatformAdmin(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = requirePlatformAdmin(req);
+    const auth = await requirePlatformAdmin(req);
     if ('error' in auth) return auth.error;
     const { db } = auth;
 
@@ -52,9 +52,9 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY b.created_at DESC`;
 
-    const businesses = db.prepare(sql).all(...params) as Omit<CrmClient, 'users'>[];
+    const businesses = await db.prepare(sql).all(...params) as Omit<CrmClient, 'users'>[];
 
-    const allUsers = db.prepare(`
+    const allUsers = await db.prepare(`
       SELECT id, business_id, name, email, role, status, is_platform_admin, created_at
       FROM users
       ORDER BY created_at ASC
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = requirePlatformAdmin(req);
+    const auth = await requirePlatformAdmin(req);
     if ('error' in auth) return auth.error;
     const { db } = auth;
 
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business name, owner name, email, and password are required' }, { status: 400 });
     }
 
-    const existing = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email);
+    const existing = await db.prepare(`SELECT id FROM users WHERE email = ?`).get(email);
     if (existing) {
       return NextResponse.json({ error: 'A user with this email already exists' }, { status: 400 });
     }
@@ -123,8 +123,8 @@ export async function POST(req: NextRequest) {
     const passwordHash = await hashPassword(password);
     const lastPaidAt = payment_status === 'Paid' ? now : null;
 
-    const tx = db.transaction(() => {
-      db.prepare(`
+    await db.transaction(async (tx) => {
+      await tx.prepare(`
         INSERT INTO businesses (
           id, name, email, phone, currency, default_tax_rate, allow_negative_inventory,
           default_min_stock, access_status, payment_status, plan_amount, last_paid_at,
@@ -144,13 +144,11 @@ export async function POST(req: NextRequest) {
         now
       );
 
-      db.prepare(`
+      await tx.prepare(`
         INSERT INTO users (id, business_id, name, email, password_hash, role, status, is_platform_admin, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'Admin', 'active', 0, ?, ?)
       `).run(userId, bizId, name, email, passwordHash, now, now);
     });
-
-    tx();
 
     return NextResponse.json({ success: true, businessId: bizId, userId }, { status: 201 });
   } catch (error: unknown) {

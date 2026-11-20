@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
 
     // Check if user already exists
-    const existingUser = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email);
+    const existingUser = await db.prepare(`SELECT id FROM users WHERE email = ?`).get(email);
     if (existingUser) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
     }
@@ -24,21 +24,19 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await hashPassword(password);
 
-    const transaction = db.transaction(() => {
+    await db.transaction(async (db) => {
       // 1. Create Business
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO businesses (id, name, email, currency, default_tax_rate, allow_negative_inventory, default_min_stock, created_at, updated_at)
         VALUES (?, ?, ?, '$', 8.5, 0, 10, ?, ?)
       `).run(bizId, businessName, email, now, now);
 
       // 2. Create Admin User
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO users (id, business_id, name, email, password_hash, role, status, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'Admin', 'active', ?, ?)
       `).run(userId, bizId, name, email, passwordHash, now, now);
     });
-
-    transaction();
 
     const sessionPayload = {
       userId,

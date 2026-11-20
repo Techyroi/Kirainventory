@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 
-function requirePlatformAdmin(req: NextRequest) {
-  const session = getSessionFromRequest(req);
+async function requirePlatformAdmin(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
   if (!session) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  const db = getDb();
-  const user = db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
+  const db = await getDb();
+  const user = await db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
   if (!user?.is_platform_admin) {
     return { error: NextResponse.json({ error: 'Platform administrator access required' }, { status: 403 }) };
   }
@@ -17,12 +17,12 @@ function requirePlatformAdmin(req: NextRequest) {
 
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
-    const auth = requirePlatformAdmin(req);
+    const auth = await requirePlatformAdmin(req);
     if ('error' in auth) return auth.error;
     const { session, db } = auth;
     const { id } = await props.params;
 
-    const existing = db.prepare(`SELECT id FROM businesses WHERE id = ?`).get(id);
+    const existing = await db.prepare(`SELECT id FROM businesses WHERE id = ?`).get(id);
     if (!existing) {
       return NextResponse.json({ error: 'Client business not found' }, { status: 404 });
     }
@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!['active', 'disabled'].includes(body.user_status)) {
         return NextResponse.json({ error: 'Invalid user status' }, { status: 400 });
       }
-      db.prepare(`UPDATE users SET status = ?, updated_at = ? WHERE id = ? AND business_id = ?`)
+      await db.prepare(`UPDATE users SET status = ?, updated_at = ? WHERE id = ? AND business_id = ?`)
         .run(body.user_status, now, body.user_id, id);
       return NextResponse.json({ success: true });
     }
@@ -89,7 +89,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       id
     );
 
-    const updated = db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(id);
+    const updated = await db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(id);
     return NextResponse.json(updated);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Server error';
@@ -99,7 +99,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
-    const auth = requirePlatformAdmin(req);
+    const auth = await requirePlatformAdmin(req);
     if ('error' in auth) return auth.error;
     const { session, db } = auth;
     const { id } = await props.params;
@@ -108,12 +108,12 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
       return NextResponse.json({ error: 'You cannot delete your own platform admin workspace' }, { status: 400 });
     }
 
-    const existing = db.prepare(`SELECT id FROM businesses WHERE id = ?`).get(id);
+    const existing = await db.prepare(`SELECT id FROM businesses WHERE id = ?`).get(id);
     if (!existing) {
       return NextResponse.json({ error: 'Client business not found' }, { status: 404 });
     }
 
-    db.prepare(`DELETE FROM businesses WHERE id = ?`).run(id);
+    await db.prepare(`DELETE FROM businesses WHERE id = ?`).run(id);
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Server error';

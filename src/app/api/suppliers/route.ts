@@ -4,13 +4,13 @@ import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('query') || '';
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     let sql = `
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY s.company_name ASC`;
 
-    const suppliers = db.prepare(sql).all(...params);
+    const suppliers = await db.prepare(sql).all(...params);
     return NextResponse.json(suppliers);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.role === 'Staff') return NextResponse.json({ error: 'Staff members cannot add suppliers' }, { status: 403 });
 
@@ -49,16 +49,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Company name is required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     const id = 'sup_' + Math.random().toString(36).substring(2, 10);
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO suppliers (id, business_id, company_name, contact_person, email, phone, address, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, session.businessId, company_name, contact_person || '', email || '', phone || '', address || '', notes || '', now, now);
 
-    const supplier = db.prepare(`SELECT * FROM suppliers WHERE id = ?`).get(id);
+    const supplier = await db.prepare(`SELECT * FROM suppliers WHERE id = ?`).get(id);
     return NextResponse.json(supplier, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });

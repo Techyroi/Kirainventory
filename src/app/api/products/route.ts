@@ -4,7 +4,7 @@ import { getDb, executeStockMovement } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'created_at';
     const sortOrder = searchParams.get('sortOrder') || 'DESC';
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     let sql = `
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY ${safeSortBy} ${safeSortOrder}`;
 
-    const products = db.prepare(sql).all(...params);
+    const products = await db.prepare(sql).all(...params);
 
     return NextResponse.json(products);
   } catch (error: any) {
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -90,11 +90,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name, SKU, cost price, and selling price are required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     // Prevent Duplicate SKU
-    const existingSku = db.prepare(`SELECT id FROM products WHERE business_id = ? AND sku = ?`).get(bizId, sku);
+    const existingSku = await db.prepare(`SELECT id FROM products WHERE business_id = ? AND sku = ?`).get(bizId, sku);
     if (existingSku) {
       return NextResponse.json({ error: `SKU '${sku}' already exists in your inventory` }, { status: 400 });
     }
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       computedStatus = 'Low Stock';
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO products (
         id, business_id, name, sku, barcode, category_id, supplier_id, description,
         cost_price, selling_price, current_stock, min_stock_level, max_stock_level,
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
 
     // Record initial stock movement if initial stock > 0
     if (stock > 0) {
-      executeStockMovement(db, {
+      await executeStockMovement(db, {
         businessId: bizId,
         productId,
         userId: session.userId,
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const newProduct = db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId);
+    const newProduct = await db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId);
 
     return NextResponse.json(newProduct, { status: 201 });
   } catch (error: any) {

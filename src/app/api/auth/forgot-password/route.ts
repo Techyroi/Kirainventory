@@ -9,8 +9,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare(`SELECT id FROM users WHERE email = ?`).get(email) as { id: string } | undefined;
+    const db = await getDb();
+    const user = await db.prepare(`SELECT id FROM users WHERE email = ?`).get(email) as { id: string } | undefined;
 
     if (!user) {
       return NextResponse.json({ success: true, message: 'If the email exists, a reset code was generated.' });
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const resetToken = crypto.randomInt(100000, 1000000).toString();
     const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
-    db.prepare(`UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?`).run(resetToken, expires, user.id);
+    await db.prepare(`UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?`).run(resetToken, expires, user.id);
 
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[DEV] Password reset code for ${email}: ${resetToken}`);

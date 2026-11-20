@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email, reset code, and new password are required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare(`SELECT * FROM users WHERE email = ? AND reset_token = ?`).get(email, resetToken) as any;
+    const db = await getDb();
+    const user = await db.prepare(`SELECT * FROM users WHERE email = ? AND reset_token = ?`).get(email, resetToken) as any;
 
     if (!user) {
       return NextResponse.json({ error: 'Invalid reset code or email' }, { status: 400 });

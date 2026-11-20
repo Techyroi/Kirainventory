@@ -5,13 +5,13 @@ import { getDb, executeStockMovement } from '@/lib/db';
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
     const params = await props.params;
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = getDb();
-    const product = db.prepare(`
+    const db = await getDb();
+    const product = await db.prepare(`
       SELECT p.*, c.name as category_name, s.company_name as supplier_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
     const params = await props.params;
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -48,17 +48,17 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       product_image, status
     } = body;
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
-    const existing = db.prepare(`SELECT * FROM products WHERE id = ? AND business_id = ?`).get(params.id, bizId) as any;
+    const existing = await db.prepare(`SELECT * FROM products WHERE id = ? AND business_id = ?`).get(params.id, bizId) as any;
     if (!existing) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
     // SKU duplicate check if SKU changed
     if (sku && sku !== existing.sku) {
-      const duplicate = db.prepare(`SELECT id FROM products WHERE business_id = ? AND sku = ? AND id != ?`).get(bizId, sku, params.id);
+      const duplicate = await db.prepare(`SELECT id FROM products WHERE business_id = ? AND sku = ? AND id != ?`).get(bizId, sku, params.id);
       if (duplicate) {
         return NextResponse.json({ error: `SKU '${sku}' is already assigned to another product` }, { status: 400 });
       }
@@ -66,7 +66,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE products SET
         name = COALESCE(?, name),
         sku = COALESCE(?, sku),
@@ -95,7 +95,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     // If current_stock was explicitly changed in edit modal, trigger Stock Movement Adjustment
     if (current_stock !== undefined && Number(current_stock) !== existing.current_stock) {
       const delta = Number(current_stock) - existing.current_stock;
-      executeStockMovement(db, {
+      await executeStockMovement(db, {
         businessId: bizId,
         productId: params.id,
         userId: session.userId,
@@ -106,7 +106,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       });
     }
 
-    const updated = db.prepare(`SELECT * FROM products WHERE id = ?`).get(params.id);
+    const updated = await db.prepare(`SELECT * FROM products WHERE id = ?`).get(params.id);
     return NextResponse.json(updated);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
@@ -116,7 +116,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
     const params = await props.params;
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -125,8 +125,8 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
       return NextResponse.json({ error: 'Staff users cannot delete products' }, { status: 403 });
     }
 
-    const db = getDb();
-    const result = db.prepare(`DELETE FROM products WHERE id = ? AND business_id = ?`).run(params.id, session.businessId);
+    const db = await getDb();
+    const result = await db.prepare(`DELETE FROM products WHERE id = ? AND business_id = ?`).run(params.id, session.businessId);
 
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });

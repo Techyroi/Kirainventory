@@ -4,7 +4,7 @@ import { getDb, executeStockMovement } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get('endDate') || '';
     const limit = Number(searchParams.get('limit')) || 100;
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     let sql = `
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     sql += ` ORDER BY m.created_at DESC LIMIT ?`;
     params.push(limit);
 
-    const movements = db.prepare(sql).all(...params);
+    const movements = await db.prepare(sql).all(...params);
     return NextResponse.json(movements);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -82,14 +82,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Quantity must be a non-zero number' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     // Movement types that decrease stock
     const decreaseTypes = ['Sale', 'Damaged', 'Lost', 'Remove'];
     const quantityDelta = decreaseTypes.includes(movementType) ? -Math.abs(qty) : Math.abs(qty);
 
-    const result = executeStockMovement(db, {
+    const result = await executeStockMovement(db, {
       businessId: bizId,
       productId,
       userId: session.userId,

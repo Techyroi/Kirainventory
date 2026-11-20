@@ -10,8 +10,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const user = db.prepare(`SELECT * FROM users WHERE email = ?`).get(email) as any;
+    const db = await getDb();
+    const user = await db.prepare(`SELECT * FROM users WHERE email = ?`).get(email) as any;
 
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Account has been disabled. Contact system administrator.' }, { status: 403 });
     }
 
-    const business = db.prepare(`SELECT access_status FROM businesses WHERE id = ?`).get(user.business_id) as { access_status?: string } | undefined;
+    const business = await db.prepare(`SELECT access_status FROM businesses WHERE id = ?`).get(user.business_id) as { access_status?: string } | undefined;
     if (business?.access_status === 'paused') {
       return NextResponse.json({
         error: 'Your account access is currently paused. Please settle your balance or contact support to reactivate.'

@@ -4,11 +4,11 @@ import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const db = getDb();
-    const business = db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(session.businessId);
+    const db = await getDb();
+    const business = await db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(session.businessId);
 
     return NextResponse.json(business);
   } catch (error: any) {
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.role !== 'Admin') return NextResponse.json({ error: 'Only Administrators can update business settings' }, { status: 403 });
 
@@ -28,10 +28,10 @@ export async function PUT(req: NextRequest) {
       default_tax_rate, allow_negative_inventory, default_min_stock
     } = body;
 
-    const db = getDb();
+    const db = await getDb();
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE businesses SET
         name = COALESCE(?, name),
         logo = COALESCE(?, logo),
@@ -52,7 +52,7 @@ export async function PUT(req: NextRequest) {
       now, session.businessId
     );
 
-    const updated = db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(session.businessId);
+    const updated = await db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(session.businessId);
     return NextResponse.json(updated);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });

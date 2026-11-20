@@ -4,14 +4,14 @@ import { getDb, executeStockMovement } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || '';
     const supplierId = searchParams.get('supplierId') || '';
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     let sql = `
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY p.created_at DESC`;
 
-    const purchases = db.prepare(sql).all(...params);
+    const purchases = await db.prepare(sql).all(...params);
     return NextResponse.json(purchases);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (session.role === 'Staff') return NextResponse.json({ error: 'Staff users cannot create purchase orders' }, { status: 403 });
 
@@ -59,11 +59,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Supplier and at least one purchase item are required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     // Generate unique PO Number (e.g. PO-2026-0005)
-    const countRow = db.prepare(`SELECT COUNT(*) as count FROM purchases WHERE business_id = ?`).get(bizId) as any;
+    const countRow = await db.prepare(`SELECT COUNT(*) as count FROM purchases WHERE business_id = ?`).get(bizId) as any;
     const poNumber = `PO-${new Date().getFullYear()}-${String((countRow?.count || 0) + 1).padStart(4, '0')}`;
 
     const poId = 'po_' + Math.random().toString(36).substring(2, 10);
@@ -71,9 +71,9 @@ export async function POST(req: NextRequest) {
 
     let totalAmount = 0;
 
-    const transaction = db.transaction(() => {
+    await db.transaction(async (db) => {
       // 1. Insert Purchase Header
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO purchases (id, business_id, purchase_number, supplier_id, user_id, status, payment_status, total_amount, notes, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
       `).run(poId, bizId, poNumber, supplier_id, session.userId, status, payment_status, notes || '', now, now);
@@ -86,14 +86,14 @@ export async function POST(req: NextRequest) {
         const totalPrice = qty * cost;
         totalAmount += totalPrice;
 
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO purchase_items (id, purchase_id, product_id, quantity, cost_price, total_price)
           VALUES (?, ?, ?, ?, ?, ?)
         `).run(itemId, poId, item.product_id, qty, cost, totalPrice);
 
         // If created directly in Received status, update stock!
         if (status === 'Received') {
-          executeStockMovement(db, {
+          await executeStockMovement(db, {
             businessId: bizId,
             productId: item.product_id,
             userId: session.userId,
@@ -106,21 +106,19 @@ export async function POST(req: NextRequest) {
       }
 
       // 3. Update total amount
-      db.prepare(`UPDATE purchases SET total_amount = ? WHERE id = ?`).run(totalAmount, poId);
+      await db.prepare(`UPDATE purchases SET total_amount = ? WHERE id = ?`).run(totalAmount, poId);
 
       // 4. Send notification if received
       if (status === 'Received') {
         const notifId = 'notif_' + Math.random().toString(36).substring(2, 10);
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO notifications (id, business_id, title, message, type, is_read, reference_id, created_at)
           VALUES (?, ?, ?, ?, 'purchase_received', 0, ?, ?)
         `).run(notifId, bizId, `Purchase Order Received: ${poNumber}`, `Received stock worth $${totalAmount.toFixed(2)}`, poId, now);
       }
     });
 
-    transaction();
-
-    const createdPO = db.prepare(`SELECT * FROM purchases WHERE id = ?`).get(poId);
+    const createdPO = await db.prepare(`SELECT * FROM purchases WHERE id = ?`).get(poId);
     return NextResponse.json(createdPO, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });

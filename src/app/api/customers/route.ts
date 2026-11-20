@@ -4,13 +4,13 @@ import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('query') || '';
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     let sql = `
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     sql += ` ORDER BY c.name ASC`;
 
-    const customers = db.prepare(sql).all(...params);
+    const customers = await db.prepare(sql).all(...params);
     return NextResponse.json(customers);
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { name, email, phone, address, notes } = await req.json();
@@ -49,16 +49,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Customer name is required' }, { status: 400 });
     }
 
-    const db = getDb();
+    const db = await getDb();
     const id = 'cust_' + Math.random().toString(36).substring(2, 10);
     const now = new Date().toISOString();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO customers (id, business_id, name, email, phone, address, notes, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, session.businessId, name, email || '', phone || '', address || '', notes || '', now, now);
 
-    const customer = db.prepare(`SELECT * FROM customers WHERE id = ?`).get(id);
+    const customer = await db.prepare(`SELECT * FROM customers WHERE id = ?`).get(id);
     return NextResponse.json(customer, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Server error' }, { status: 500 });

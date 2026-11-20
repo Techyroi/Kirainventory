@@ -1,23 +1,117 @@
-import Database from 'better-sqlite3';
+import { createClient, Client, InValue, Transaction } from '@libsql/client';
 import path from 'path';
 
-// Singleton instance for Next.js hot-reloading
-const dbPath = path.join(process.cwd(), 'inventory.db');
-
-let dbInstance: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!dbInstance) {
-    dbInstance = new Database(dbPath);
-    dbInstance.pragma('journal_mode = WAL');
-    dbInstance.pragma('foreign_keys = ON');
-    initSchema(dbInstance);
-  }
-  return dbInstance;
+export interface StatementResult {
+  changes: number;
+  lastInsertRowid: number | bigint | undefined;
 }
 
-function initSchema(db: Database.Database) {
-  db.exec(`
+export interface PreparedStatement {
+  get: (...args: unknown[]) => Promise<Record<string, unknown> | any | undefined>;
+  all: (...args: unknown[]) => Promise<any[]>;
+  run: (...args: unknown[]) => Promise<StatementResult>;
+}
+
+export interface DbClient {
+  prepare: (sql: string) => PreparedStatement;
+  exec: (sql: string) => Promise<void>;
+  transaction: <T>(fn: (tx: DbClient) => Promise<T>) => Promise<T>;
+}
+
+function sanitizeArgs(args: unknown[]): InValue[] {
+  return args.map((v) => (v === undefined ? null : (v as InValue)));
+}
+
+function wrapExecutor(executor: Client | Transaction, rootClient?: Client): DbClient {
+  const clientForTx = rootClient || (executor as Client);
+  return {
+    prepare(sql: string): PreparedStatement {
+      return {
+        async get(...args: unknown[]) {
+          const res = await executor.execute({ sql, args: sanitizeArgs(args) });
+          return res.rows[0] as any;
+        },
+        async all(...args: unknown[]) {
+          const res = await executor.execute({ sql, args: sanitizeArgs(args) });
+          return res.rows as any[];
+        },
+        async run(...args: unknown[]) {
+          const res = await executor.execute({ sql, args: sanitizeArgs(args) });
+          return {
+            changes: res.rowsAffected,
+            lastInsertRowid: res.lastInsertRowid
+          };
+        }
+      };
+    },
+    async exec(sql: string) {
+      if ('executeMultiple' in executor && typeof executor.executeMultiple === 'function') {
+        await executor.executeMultiple(sql);
+      } else {
+        const statements = sql
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        for (const stmt of statements) {
+          await executor.execute(stmt);
+        }
+      }
+    },
+    async transaction<T>(fn: (tx: DbClient) => Promise<T>): Promise<T> {
+      // If already inside a transaction, reuse the current transaction executor
+      if (!('transaction' in executor) || typeof (executor as Client).transaction !== 'function') {
+        return await fn(this);
+      }
+      const tx = await clientForTx.transaction('write');
+      try {
+        const wrappedTx = wrapExecutor(tx, clientForTx);
+        const result = await fn(wrappedTx);
+        await tx.commit();
+        return result;
+      } catch (err) {
+        await tx.rollback();
+        throw err;
+      }
+    }
+  };
+}
+
+let rawClient: Client | null = null;
+let initPromise: Promise<DbClient> | null = null;
+
+function getClientUrl(): { url: string; authToken?: string } {
+  if (process.env.TURSO_DATABASE_URL) {
+    return {
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN
+    };
+  }
+  const localPath = process.env.VERCEL
+    ? '/tmp/inventory.db'
+    : path.join(process.cwd(), 'inventory.db');
+  return { url: `file:${localPath}` };
+}
+
+export async function getDb(): Promise<DbClient> {
+  if (!rawClient) {
+    rawClient = createClient(getClientUrl());
+  }
+  const db = wrapExecutor(rawClient, rawClient);
+  if (!initPromise) {
+    initPromise = (async () => {
+      await db.exec('PRAGMA foreign_keys = ON;');
+      await initSchema(db);
+      return db;
+    })().catch((err) => {
+      initPromise = null;
+      throw err;
+    });
+  }
+  return await initPromise;
+}
+
+async function initSchema(db: DbClient) {
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS businesses (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -209,7 +303,7 @@ function initSchema(db: Database.Database) {
   `);
 
   // Safe migrations for existing databases
-  const bizCols = (db.prepare(`PRAGMA table_info(businesses)`).all() as Array<{ name: string }>).map(c => c.name);
+  const bizCols = ((await db.prepare(`PRAGMA table_info(businesses)`).all()) as Array<{ name: string }>).map((c) => c.name);
   const bizMigrations: Array<[string, string]> = [
     ['access_status', `ALTER TABLE businesses ADD COLUMN access_status TEXT DEFAULT 'active'`],
     ['payment_status', `ALTER TABLE businesses ADD COLUMN payment_status TEXT DEFAULT 'Paid'`],
@@ -220,20 +314,27 @@ function initSchema(db: Database.Database) {
   ];
   for (const [col, sql] of bizMigrations) {
     if (!bizCols.includes(col)) {
-      db.exec(sql);
+      await db.exec(sql);
     }
   }
 
-  const userCols = (db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>).map(c => c.name);
+  const userCols = ((await db.prepare(`PRAGMA table_info(users)`).all()) as Array<{ name: string }>).map((c) => c.name);
   if (!userCols.includes('is_platform_admin')) {
-    db.exec(`ALTER TABLE users ADD COLUMN is_platform_admin INTEGER DEFAULT 0`);
+    await db.exec(`ALTER TABLE users ADD COLUMN is_platform_admin INTEGER DEFAULT 0`);
   }
 
   // Ensure a platform admin exists (defaults to PLATFORM_ADMIN_EMAIL or admin@demo.com)
-  const hasPlatformAdmin = db.prepare(`SELECT id FROM users WHERE is_platform_admin = 1 LIMIT 1`).get();
+  const hasPlatformAdmin = await db.prepare(`SELECT id FROM users WHERE is_platform_admin = 1 LIMIT 1`).get();
   if (!hasPlatformAdmin) {
     const targetEmail = process.env.PLATFORM_ADMIN_EMAIL || 'admin@demo.com';
-    db.prepare(`UPDATE users SET is_platform_admin = 1 WHERE email = ?`).run(targetEmail);
+    await db.prepare(`UPDATE users SET is_platform_admin = 1 WHERE email = ?`).run(targetEmail);
+  }
+
+  // Auto-seed demo data if the database is completely empty (e.g. fresh Turso DB)
+  const userCount = (await db.prepare(`SELECT COUNT(*) AS count FROM users`).get()) as { count: number } | undefined;
+  if (!userCount || Number(userCount.count) === 0) {
+    const { seedDatabase } = await import('./seed');
+    await seedDatabase(db);
   }
 }
 
@@ -242,30 +343,37 @@ export interface StockMovementParams {
   productId: string;
   userId: string;
   movementType: 'Purchase' | 'Sale' | 'Return' | 'Damaged' | 'Lost' | 'Adjustment' | 'Transfer';
-  quantityDelta: number; // positive to add stock, negative to decrease stock
+  quantityDelta: number;
   reason?: string;
   referenceId?: string;
 }
 
-export function executeStockMovement(db: Database.Database, params: StockMovementParams): { newQuantity: number; previousQuantity: number } {
-  const transaction = db.transaction(() => {
-    // 1. Fetch current product & business settings
-    const product = db.prepare(`SELECT * FROM products WHERE id = ? AND business_id = ?`).get(params.productId, params.businessId) as any;
+export async function executeStockMovement(
+  db: DbClient,
+  params: StockMovementParams
+): Promise<{ newQuantity: number; previousQuantity: number }> {
+  return await db.transaction(async (tx) => {
+    const product = (await tx
+      .prepare(`SELECT * FROM products WHERE id = ? AND business_id = ?`)
+      .get(params.productId, params.businessId)) as any;
     if (!product) {
       throw new Error('Product not found');
     }
 
-    const business = db.prepare(`SELECT * FROM businesses WHERE id = ?`).get(params.businessId) as any;
+    const business = (await tx
+      .prepare(`SELECT * FROM businesses WHERE id = ?`)
+      .get(params.businessId)) as any;
     const allowNegative = business?.allow_negative_inventory === 1;
 
     const previousQuantity = product.current_stock;
     const newQuantity = previousQuantity + params.quantityDelta;
 
     if (newQuantity < 0 && !allowNegative) {
-      throw new Error(`Insufficient stock for ${product.name}. Available: ${previousQuantity}, Required: ${Math.abs(params.quantityDelta)}`);
+      throw new Error(
+        `Insufficient stock for ${product.name}. Available: ${previousQuantity}, Required: ${Math.abs(params.quantityDelta)}`
+      );
     }
 
-    // 2. Compute status
     let status = product.status;
     if (status !== 'Inactive') {
       if (newQuantity <= 0) {
@@ -279,65 +387,66 @@ export function executeStockMovement(db: Database.Database, params: StockMovemen
 
     const now = new Date().toISOString();
 
-    // 3. Update product stock & status
-    db.prepare(`
-      UPDATE products 
-      SET current_stock = ?, status = ?, updated_at = ?
-      WHERE id = ? AND business_id = ?
-    `).run(newQuantity, status, now, params.productId, params.businessId);
+    await tx
+      .prepare(
+        `UPDATE products SET current_stock = ?, status = ?, updated_at = ? WHERE id = ? AND business_id = ?`
+      )
+      .run(newQuantity, status, now, params.productId, params.businessId);
 
-    // 4. Log movement record
     const movementId = 'mov_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
-    db.prepare(`
-      INSERT INTO inventory_movements (
-        id, business_id, product_id, user_id, movement_type, 
-        quantity, previous_quantity, new_quantity, reason, reference_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      movementId,
-      params.businessId,
-      params.productId,
-      params.userId,
-      params.movementType,
-      params.quantityDelta,
-      previousQuantity,
-      newQuantity,
-      params.reason || `${params.movementType} adjustment`,
-      params.referenceId || null,
-      now
-    );
+    await tx
+      .prepare(
+        `INSERT INTO inventory_movements (
+          id, business_id, product_id, user_id, movement_type,
+          quantity, previous_quantity, new_quantity, reason, reference_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        movementId,
+        params.businessId,
+        params.productId,
+        params.userId,
+        params.movementType,
+        params.quantityDelta,
+        previousQuantity,
+        newQuantity,
+        params.reason || `${params.movementType} adjustment`,
+        params.referenceId || null,
+        now
+      );
 
-    // 5. Trigger automated notification if status changed to Low Stock or Out of Stock
     if (newQuantity <= 0) {
       const notifId = 'notif_' + Math.random().toString(36).substring(2, 11);
-      db.prepare(`
-        INSERT INTO notifications (id, business_id, title, message, type, is_read, reference_id, created_at)
-        VALUES (?, ?, ?, ?, 'out_of_stock', 0, ?, ?)
-      `).run(
-        notifId,
-        params.businessId,
-        `Out of Stock: ${product.name}`,
-        `${product.name} (SKU: ${product.sku}) is now out of stock!`,
-        params.productId,
-        now
-      );
+      await tx
+        .prepare(
+          `INSERT INTO notifications (id, business_id, title, message, type, is_read, reference_id, created_at)
+           VALUES (?, ?, ?, ?, 'out_of_stock', 0, ?, ?)`
+        )
+        .run(
+          notifId,
+          params.businessId,
+          `Out of Stock: ${product.name}`,
+          `${product.name} (SKU: ${product.sku}) is now out of stock!`,
+          params.productId,
+          now
+        );
     } else if (newQuantity <= product.min_stock_level) {
       const notifId = 'notif_' + Math.random().toString(36).substring(2, 11);
-      db.prepare(`
-        INSERT INTO notifications (id, business_id, title, message, type, is_read, reference_id, created_at)
-        VALUES (?, ?, ?, ?, 'low_stock', 0, ?, ?)
-      `).run(
-        notifId,
-        params.businessId,
-        `Low Stock Warning: ${product.name}`,
-        `${product.name} stock level is ${newQuantity} (Minimum threshold: ${product.min_stock_level}).`,
-        params.productId,
-        now
-      );
+      await tx
+        .prepare(
+          `INSERT INTO notifications (id, business_id, title, message, type, is_read, reference_id, created_at)
+           VALUES (?, ?, ?, ?, 'low_stock', 0, ?, ?)`
+        )
+        .run(
+          notifId,
+          params.businessId,
+          `Low Stock Warning: ${product.name}`,
+          `${product.name} stock level is ${newQuantity} (Minimum threshold: ${product.min_stock_level}).`,
+          params.productId,
+          now
+        );
     }
 
     return { newQuantity, previousQuantity };
   });
-
-  return transaction();
 }

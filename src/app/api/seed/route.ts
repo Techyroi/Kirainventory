@@ -9,13 +9,13 @@ async function handleSeed(req: NextRequest) {
       return NextResponse.json({ error: 'Seeding is disabled in production' }, { status: 403 });
     }
 
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = getDb();
-    const user = db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
+    const db = await getDb();
+    const user = await db.prepare(`SELECT is_platform_admin FROM users WHERE id = ?`).get(session.userId) as { is_platform_admin?: number } | undefined;
     if (!user?.is_platform_admin) {
       return NextResponse.json({ error: 'Platform administrator access required' }, { status: 403 });
     }

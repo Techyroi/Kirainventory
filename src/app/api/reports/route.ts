@@ -4,7 +4,7 @@ import { getDb } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    const session = getSessionFromRequest(req);
+    const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const categoryId = searchParams.get('categoryId') || '';
     const supplierId = searchParams.get('supplierId') || '';
 
-    const db = getDb();
+    const db = await getDb();
     const bizId = session.businessId;
 
     // Date filters for sales
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 1. Sales Summary Metrics
-    const salesSummary = db.prepare(`
+    const salesSummary = await db.prepare(`
       SELECT COUNT(*) as order_count,
              COALESCE(SUM(s.total_amount), 0) as total_revenue,
              COALESCE(AVG(s.total_amount), 0) as avg_order_value,
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     `).get(...salesParams) as any;
 
     // Sales over time trend
-    const salesTrend = db.prepare(`
+    const salesTrend = await db.prepare(`
       SELECT date(s.created_at) as date,
              SUM(s.total_amount) as revenue,
              COUNT(*) as orders
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       prodParams.push(supplierId);
     }
 
-    const inventoryValuation = db.prepare(`
+    const inventoryValuation = await db.prepare(`
       SELECT COUNT(*) as total_items,
              COALESCE(SUM(p.current_stock), 0) as total_quantity,
              COALESCE(SUM(p.current_stock * p.cost_price), 0) as total_cost_value,
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
     `).get(...prodParams) as any;
 
     // 3. Product Performance Report (Top Sellers & Profitability)
-    const productPerformance = db.prepare(`
+    const productPerformance = await db.prepare(`
       SELECT p.id, p.name, p.sku, c.name as category_name,
              p.cost_price, p.selling_price, (p.selling_price - p.cost_price) as unit_profit,
              p.current_stock,
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
       purParams.push(endDate);
     }
 
-    const purchaseSummary = db.prepare(`
+    const purchaseSummary = await db.prepare(`
       SELECT COUNT(*) as total_pos,
              COALESCE(SUM(pur.total_amount), 0) as total_purchase_spend,
              SUM(CASE WHEN pur.payment_status != 'Paid' THEN pur.total_amount ELSE 0 END) as outstanding_payments
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
       ${purchaseWhere}
     `).get(...purParams) as any;
 
-    const purchasesBySupplier = db.prepare(`
+    const purchasesBySupplier = await db.prepare(`
       SELECT sup.company_name as supplier_name,
              COUNT(pur.id) as order_count,
              SUM(pur.total_amount) as total_spend
