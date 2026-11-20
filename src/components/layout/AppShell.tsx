@@ -134,9 +134,11 @@ export function AppShell({ children }: AppShellProps) {
       <aside className="hidden lg:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0">
         {/* Brand */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-800">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
-            {business?.name ? business.name.charAt(0) : 'I'}
-          </div>
+          <img
+            src="/kiralyte-icon.png"
+            alt="Kiralyte"
+            className="w-10 h-10 rounded-xl object-contain shadow-lg shadow-indigo-500/20 flex-shrink-0"
+          />
           <div className="overflow-hidden">
             <h1 className="font-bold text-slate-100 truncate text-base leading-tight">
               {business?.name || 'Kiralyte POS system'}

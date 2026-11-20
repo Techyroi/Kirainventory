@@ -6,7 +6,12 @@ import { AppLayout } from '@/components/layout/AppLayout';
 
 export const metadata: Metadata = {
   title: 'Kiralyte POS system - Production-Ready Inventory Management System',
-  description: 'Manage products, track stock, record purchases and sales, handle POS checkout, and analyze business performance.'
+  description: 'Manage products, track stock, record purchases and sales, handle POS checkout, and analyze business performance.',
+  icons: {
+    icon: '/kiralyte-icon.png',
+    shortcut: '/favicon.ico',
+    apple: '/kiralyte-icon.png'
+  }
 };
 
 export default function RootLayout({

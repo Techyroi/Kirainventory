@@ -53,9 +53,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-2xl shadow-xl shadow-indigo-500/20 mb-4">
-          I
-        </div>
+        <img
+          src="/kiralyte-logo.png"
+          alt="Kiralyte POS system"
+          className="h-16 w-auto mx-auto mb-4"
+        />
         <h2 className="text-3xl font-extrabold text-white tracking-tight">Sign in to Kiralyte POS system</h2>
         <p className="mt-2 text-sm text-slate-400">Enterprise Inventory & POS Management</p>
       </div>

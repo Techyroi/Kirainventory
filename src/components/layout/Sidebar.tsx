@@ -65,9 +65,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {/* Brand Header */}
         <div className="flex items-center justify-between h-16 px-6 border-b border-slate-800/80 bg-slate-950/40">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
-              {business?.name ? business.name.charAt(0) : 'I'}
-            </div>
+            <img
+              src="/kiralyte-icon.png"
+              alt="Kiralyte"
+              className="w-9 h-9 rounded-xl object-contain shadow-lg shadow-indigo-500/20 flex-shrink-0"
+            />
             <div>
               <h1 className="text-sm font-bold text-white leading-tight truncate max-w-[130px]">
                 {business?.name || 'Kiralyte POS system'}
