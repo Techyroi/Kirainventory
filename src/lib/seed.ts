@@ -5,7 +5,6 @@ export async function seedDatabase(existingDb?: DbClient) {
   const db = existingDb || (await getDb());
 
   console.log('🌱 Clearing existing database tables...');
-  await db.exec('PRAGMA foreign_keys = OFF;');
   await db.exec('DELETE FROM notifications;');
   await db.exec('DELETE FROM inventory_movements;');
   await db.exec('DELETE FROM sale_items;');
@@ -18,7 +17,6 @@ export async function seedDatabase(existingDb?: DbClient) {
   await db.exec('DELETE FROM categories;');
   await db.exec('DELETE FROM users;');
   await db.exec('DELETE FROM businesses;');
-  await db.exec('PRAGMA foreign_keys = ON;');
 
   const now = new Date().toISOString();
   const pastDate = (daysAgo: number) => {

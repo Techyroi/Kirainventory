@@ -45,16 +45,15 @@ function wrapExecutor(executor: Client | Transaction, rootClient?: Client): DbCl
       };
     },
     async exec(sql: string) {
-      if ('executeMultiple' in executor && typeof executor.executeMultiple === 'function') {
-        await executor.executeMultiple(sql);
-      } else {
-        const statements = sql
-          .split(';')
-          .map((s) => s.trim())
-          .filter(Boolean);
-        for (const stmt of statements) {
-          await executor.execute(stmt);
-        }
+      const statements = sql
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('--'))
+        .join('\n')
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const stmt of statements) {
+        await executor.execute(stmt);
       }
     },
     async transaction<T>(fn: (tx: DbClient) => Promise<T>): Promise<T> {
@@ -80,10 +79,12 @@ let rawClient: Client | null = null;
 let initPromise: Promise<DbClient> | null = null;
 
 function getClientUrl(): { url: string; authToken?: string } {
-  if (process.env.TURSO_DATABASE_URL) {
+  const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
+  const tursoToken = process.env.TURSO_AUTH_TOKEN?.trim();
+  if (tursoUrl) {
     return {
-      url: process.env.TURSO_DATABASE_URL,
-      authToken: process.env.TURSO_AUTH_TOKEN
+      url: tursoUrl,
+      authToken: tursoToken
     };
   }
   const localPath = process.env.VERCEL
@@ -99,7 +100,11 @@ export async function getDb(): Promise<DbClient> {
   const db = wrapExecutor(rawClient, rawClient);
   if (!initPromise) {
     initPromise = (async () => {
-      await db.exec('PRAGMA foreign_keys = ON;');
+      try {
+        await db.exec('PRAGMA foreign_keys = ON;');
+      } catch {
+        // Remote libSQL/Turso servers may manage foreign keys at server level
+      }
       await initSchema(db);
       return db;
     })().catch((err) => {
