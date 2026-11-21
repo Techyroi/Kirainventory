@@ -1,24 +1,23 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { KeyRound, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
-  const tokenParam = searchParams.get('token') || '';
+  const emailParam = searchParams.get('email') || '';
+  const codeParam = searchParams.get('code') || searchParams.get('token') || '';
 
-  const [token, setToken] = useState(tokenParam);
+  const [email, setEmail] = useState(emailParam);
+  const [resetToken, setResetToken] = useState(codeParam);
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    if (tokenParam) setToken(tokenParam);
-  }, [tokenParam]);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +28,7 @@ function ResetPasswordForm() {
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, newPassword })
+        body: JSON.stringify({ email, resetToken, newPassword })
       });
 
       const data = await res.json();
@@ -41,8 +40,8 @@ function ResetPasswordForm() {
       setTimeout(() => {
         router.push('/login');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Reset failed');
     } finally {
       setLoading(false);
     }
@@ -55,7 +54,7 @@ function ResetPasswordForm() {
           <KeyRound className="w-7 h-7" />
         </div>
         <h2 className="text-3xl font-extrabold text-white tracking-tight">Set New Password</h2>
-        <p className="mt-2 text-sm text-slate-400">Choose a new password for your account</p>
+        <p className="mt-2 text-sm text-slate-400">Enter your email, 6-digit code, and new password</p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -79,15 +78,29 @@ function ResetPasswordForm() {
             <form className="space-y-4" onSubmit={handleReset}>
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Reset Token
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  6-Digit Reset Code
                 </label>
                 <input
                   type="text"
                   required
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="reset_..."
-                  className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  value={resetToken}
+                  onChange={(e) => setResetToken(e.target.value)}
+                  placeholder="123456"
+                  className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
               </div>
 
@@ -95,8 +108,7 @@ function ResetPasswordForm() {
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   New Password
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   required
                   minLength={6}
                   value={newPassword}

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { UserPlus, Building2, ShieldAlert } from 'lucide-react';
 
 export default function SignupPage() {
@@ -107,8 +108,7 @@ export default function SignupPage() {
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
                 Password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 required
                 minLength={6}
                 value={password}

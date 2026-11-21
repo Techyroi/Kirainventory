@@ -6,6 +6,7 @@ import { BillingPaymentStatus, CrmClient } from '@/types';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import {
   Building2,
   CheckCircle2,
@@ -554,8 +555,7 @@ export default function ClientCrmPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Temporary Password *</label>
-              <input
-                type="password"
+              <PasswordInput
                 required
                 value={addForm.password}
                 onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}

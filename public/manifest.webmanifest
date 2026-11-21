@@ -1,0 +1,16 @@
+{
+  "name": "Kiralyte POS system",
+  "short_name": "Kiralyte POS",
+  "description": "Offline-capable Inventory & POS Management System",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/kiralyte-icon.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    }
+  ]
+}

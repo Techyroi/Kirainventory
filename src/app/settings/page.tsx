@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { User, Business } from '@/types';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { Settings, Building2, Boxes, Users, Plus, Save, ShieldCheck, AlertCircle } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -427,8 +428,7 @@ export default function SettingsPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Initial Password *</label>
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={6}
               value={userForm.password}

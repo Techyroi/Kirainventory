@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { LogIn, KeyRound, ShieldAlert, Sparkles, Building2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -95,8 +96,7 @@ export default function LoginPage() {
                   Forgot password?
                 </Link>
               </div>
-              <input
-                type="password"
+              <PasswordInput
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

@@ -3,10 +3,12 @@ import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { CurrencyProvider } from '@/context/CurrencyContext';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { OfflineManager } from '@/components/OfflineManager';
 
 export const metadata: Metadata = {
   title: 'Kiralyte POS system - Production-Ready Inventory Management System',
   description: 'Manage products, track stock, record purchases and sales, handle POS checkout, and analyze business performance.',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: '/kiralyte-icon.png',
     shortcut: '/favicon.ico',
@@ -24,6 +26,7 @@ export default function RootLayout({
       <body className="font-sans bg-slate-950 text-slate-100 antialiased">
         <AuthProvider>
           <CurrencyProvider>
+            <OfflineManager />
             <AppLayout>
               {children}
             </AppLayout>

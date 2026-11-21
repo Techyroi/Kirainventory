@@ -2,17 +2,19 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { KeyRound, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { KeyRound, ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [demoToken, setDemoToken] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     try {
       const res = await fetch('/api/auth/forgot-password', {
@@ -22,12 +24,14 @@ export default function ForgotPasswordPage() {
       });
 
       const data = await res.json();
-      setSubmitted(true);
-      if (data.demoResetToken) {
-        setDemoToken(data.demoResetToken);
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send reset code');
       }
-    } catch (e) {
+
+      setStatusMessage(data.message || 'Check your email for the 6-digit reset code.');
       setSubmitted(true);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to request password reset');
     } finally {
       setLoading(false);
     }
@@ -40,37 +44,38 @@ export default function ForgotPasswordPage() {
           <KeyRound className="w-7 h-7" />
         </div>
         <h2 className="text-3xl font-extrabold text-white tracking-tight">Forgot Password</h2>
-        <p className="mt-2 text-sm text-slate-400">Enter your email to receive password reset instructions</p>
+        <p className="mt-2 text-sm text-slate-400">Enter your email to receive a 6-digit password reset code</p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-slate-900 border border-slate-800 py-8 px-4 shadow-2xl rounded-2xl sm:px-10">
+          {error && (
+            <div className="mb-4 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-3 text-rose-400 text-sm">
+              <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
           {submitted ? (
             <div className="text-center space-y-4">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Instructions Sent</h3>
-              <p className="text-xs text-slate-400">
-                If an account exists with <span className="text-slate-200 font-medium">{email}</span>, password reset details have been generated.
+              <h3 className="text-lg font-semibold text-white">Reset Code Requested</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {statusMessage}
               </p>
 
-              {demoToken && (
-                <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 text-left space-y-2">
-                  <p className="text-xs font-bold text-amber-400">Demo Mode Helper:</p>
-                  <p className="text-[11px] text-slate-300">Generated Token: <code className="text-indigo-300 select-all font-mono">{demoToken}</code></p>
-                  <Link
-                    href={`/reset-password?token=${demoToken}`}
-                    className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500"
-                  >
-                    Proceed to Reset Password Page →
-                  </Link>
-                </div>
-              )}
+              <Link
+                href={`/reset-password?email=${encodeURIComponent(email)}`}
+                className="inline-block w-full py-2.5 px-4 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500 transition-colors"
+              >
+                Enter Reset Code →
+              </Link>
 
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-400 hover:underline pt-4"
+                className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-400 hover:underline pt-2"
               >
                 <ArrowLeft className="w-4 h-4" /> Back to Sign In
               </Link>
@@ -86,7 +91,7 @@ export default function ForgotPasswordPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@demo.com"
+                  placeholder="you@company.com"
                   className="mt-1.5 block w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 />
               </div>
@@ -96,7 +101,7 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
                 className="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/30 disabled:opacity-50"
               >
-                {loading ? 'Sending...' : 'Request Reset Link'}
+                {loading ? 'Sending...' : 'Send Reset Code'}
               </button>
 
               <div className="text-center pt-4">
