@@ -45,8 +45,8 @@ export default function SignupPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <img
           src="/kiralyte-logo.png"
-          alt="Kiralyte POS system"
-          className="h-16 w-auto mx-auto mb-4"
+          alt="Kiralyte POS & Inventory"
+          className="h-28 w-auto mx-auto rounded-2xl mb-4"
         />
         <h2 className="text-3xl font-extrabold text-white tracking-tight">Create Business Account</h2>
         <p className="mt-2 text-sm text-slate-400">Set up your multi-tenant inventory workspace</p>

@@ -11,7 +11,7 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children })
   const { user, loading } = useAuth();
   const pathname = usePathname();
 
-  const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname);
+  const isAuthPage = ['/', '/login', '/signup', '/forgot-password', '/reset-password'].includes(pathname);
 
   if (isAuthPage) {
     return <>{children}</>;
